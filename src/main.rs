@@ -1,5 +1,7 @@
 // Combination of copied from the serenity github and my own code.
 
+use serde::{Deserialize, Serialize};
+
 use std::{
     collections::{HashMap, HashSet},
     fmt::Write,
@@ -89,10 +91,16 @@ impl TypeMapKey for ActionTracker {
     type Value = HashMap<String, Action>;
 }
 
+#[derive(Deserialize, Serialize)]
+struct About {
+    title: String,
+    description: String,
+}
+
 struct CustomAbout;
 
 impl TypeMapKey for CustomAbout {
-    type Value = HashMap<String, String>;
+    type Value = About;
 }
 
 struct Handler;
@@ -1001,13 +1009,33 @@ async fn main() {
         .await
         .expect("Err creating client");
 
+
+    let mut info: File = if Path::new("info.json").exists() {
+        OpenOptions::new().read(true).open("info.json").unwrap()
+    } else {
+        {
+            let mut temp = OpenOptions::new()
+                .write(true)
+                .create(true)
+                .open("info.json")
+                .unwrap();
+            temp.write(b"{\"title\":\"Sample title\",\"description\": \"Sample description. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.\"}").unwrap();
+        }
+        println!(
+            "Create new actions in actions.txt\nSee the GitHub for documentation and examples."
+        );
+        OpenOptions::new().read(true).open("actions.txt").unwrap()
+    };
+    let mut json_content : String = String::new();
+    info.read_to_string(&mut json_content).unwrap();
+
     {
         let mut data = client.data.write().await;
         data.insert::<ShardManagerContainer>(client.shard_manager.clone());
         data.insert::<ActionTracker>(parse_action_file());
         data.insert::<GamerModeTracker>(false);
         data.insert::<CommandCounter>(HashMap::default());
-        data.insert::<CustomAbout>(HashMap::from([("title".to_string(), "Sample title".to_string()), ("description".to_string(), "Sample description. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.".to_string())]))
+        data.insert::<CustomAbout>( serde_json::from_str(&json_content).unwrap() )
     }
 
     let shard_manager = client.shard_manager.clone();
@@ -1125,9 +1153,8 @@ async fn about(ctx: &Context, msg: &Message) -> CommandResult {
     msg.channel_id
         .send_message(&ctx.http, |m| {
             m.embed(|e| {
-                // ???
-                e.title(&fields[&"title".to_string()]);
-                e.description(&fields[&"description".to_string()]);
+                e.title(&fields.title);
+                e.description(&fields.description);
                 e.thumbnail(url);
                 e
             });
@@ -1307,19 +1334,31 @@ async fn set_icon(ctx: &Context, msg: &Message, mut _args: Args) -> CommandResul
 #[command]
 async fn set_title(ctx: &Context, _msg: &Message, args: Args) -> CommandResult {
     let mut data = ctx.data.write().await;
-    let about = data
+    let mut about = data
         .get_mut::<CustomAbout>()
         .expect("Expected CustomAbout in TypeMap.");
-    about.insert("title".to_string(), args.rest().to_string());
+    about.title = args.rest().to_string();
+    let mut info: File = if Path::new("info.json").exists() {
+        OpenOptions::new().write(true).open("info.json").unwrap()
+    } else {
+        OpenOptions::new().write(true).create(true).open("info.json").unwrap()
+    };
+    info.write_all(serde_json::to_string(&about).unwrap().as_bytes()).unwrap();
     Ok(())
 }
 
 #[command]
 async fn set_description(ctx: &Context, _msg: &Message, args: Args) -> CommandResult {
     let mut data = ctx.data.write().await;
-    let about = data
+    let mut about = data
         .get_mut::<CustomAbout>()
         .expect("Expected CustomAbout in TypeMap.");
-    about.insert("description".to_string(), args.rest().to_string());
+    about.description = args.rest().to_string();
+    let mut info: File = if Path::new("info.json").exists() {
+        OpenOptions::new().write(true).open("info.json").unwrap()
+    } else {
+        OpenOptions::new().write(true).create(true).open("info.json").unwrap()
+    };
+    info.write_all(serde_json::to_string(&about).unwrap().as_bytes()).unwrap();
     Ok(())
 }
