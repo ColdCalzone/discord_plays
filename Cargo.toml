@@ -1,6 +1,6 @@
 [package]
 name = "discord_plays"
-version = "0.1.0"
+version = "0.9.0"
 authors = ["ColdCalzone <coldhotpocket1@gmail.com>"]
 edition = "2018"
 

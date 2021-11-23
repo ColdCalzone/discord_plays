@@ -128,7 +128,7 @@ struct Mods;
 #[allowed_roles("Mods", "Admin", "Discord Plays Manager")]
 #[only_in(guilds)]
 #[summary = "Commands for gaming actions"]
-#[commands(reload_actions)]
+#[commands(reload_actions, start_discord_plays, stop_discord_plays)]
 struct Gaming;
 
 #[help]
@@ -179,10 +179,23 @@ async fn my_help(
 
     if let Some(member) = &msg.member {
         for role in &member.roles {
+            // Change this to fit your specific server setup
             if role
                 .to_role_cached(&context.cache)
                 .await
                 .map_or(false, |r| r.has_permission(Permissions::ADMINISTRATOR))
+                || role
+                    .to_role_cached(&context.cache)
+                    .await
+                    .expect("Invalid Role. What")
+                    .name
+                    == "Mods".to_string()
+                || role
+                    .to_role_cached(&context.cache)
+                    .await
+                    .expect("Invalid Role. What")
+                    .name
+                    == "Admin".to_string()
             {
                 is_admin = true;
 
@@ -298,8 +311,8 @@ async fn my_help(
 				    _ => {}
 				}
 				e.field("General", &formatted_data["General"], true);
-				if is_admin{
-					e.field("Admins", &formatted_data["Admins"], true);
+				if is_admin {
+					e.field("Mods", &formatted_data["Mods"], true);
 				}
 				e.field("Gaming", &formatted_data["Gaming"], true);
 				e
@@ -456,7 +469,7 @@ fn _dispatch_error_no_macro<'fut>(
 // All action parsing code
 
 fn parse_action_file() -> HashMap<String, Action> {
-    let mut file : File = if Path::new("actions.txt").exists() {
+    let mut file: File = if Path::new("actions.txt").exists() {
         OpenOptions::new().read(true).open("actions.txt").unwrap()
     } else {
         {
@@ -488,7 +501,7 @@ fn parse_action_file() -> HashMap<String, Action> {
             if the_line == "" {
                 continue;
             }
-            let mut raw_instruction: Vec<&str> = the_line.split(' ').collect();
+            let mut raw_instruction: Vec<&str> = the_line.split_whitespace().collect::<Vec<&str>>();
 
             let mut comment: bool = false;
             let mut index: usize = 0;
@@ -517,11 +530,11 @@ fn parse_action_file() -> HashMap<String, Action> {
                 continue;
             }
             if raw_instruction[0].ends_with(":") {
-                    action.name =
-                        Some(raw_instruction[0].split(":").collect::<Vec<&str>>()[0].to_string());
-                    continue;
+                action.name =
+                    Some(raw_instruction[0].split(":").collect::<Vec<&str>>()[0].to_string());
+                continue;
             }
-                    
+
             let instruction: Token = match raw_instruction[0] {
                 "move" => Token::MouseMove {
                     direction: match raw_instruction[1] {
@@ -805,7 +818,14 @@ fn parse_action_file() -> HashMap<String, Action> {
                 // I hate this and everything about this.
                 action.instructions.push(instruction);
                 println!("{:#?}", action);
-                actions.insert(action.name.as_ref().expect("No name for action").to_string(), action);
+                actions.insert(
+                    action
+                        .name
+                        .as_ref()
+                        .expect("No name for action")
+                        .to_string(),
+                    action,
+                );
                 action = Action {
                     name: None,
                     instructions: vec![],
@@ -913,7 +933,7 @@ async fn main() {
         let mut data = client.data.write().await;
         data.insert::<ShardManagerContainer>(client.shard_manager.clone());
         data.insert::<ActionTracker>(parse_action_file());
-        data.insert::<GamerModeTracker>(true);
+        data.insert::<GamerModeTracker>(false);
         data.insert::<CommandCounter>(HashMap::default());
     }
 
@@ -1098,6 +1118,15 @@ async fn slow_mode(ctx: &Context, msg: &Message, mut args: Args) -> CommandResul
 
 #[command]
 async fn kill(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
+    let data = ctx.data.read().await;
+
+    let shard_manager = match data.get::<ShardManagerContainer>() {
+        Some(v) => v,
+        None => {
+            std::process::exit(0);
+        }
+    };
+    shard_manager.lock().await.shutdown_all().await;
     std::process::exit(0);
 }
 
@@ -1108,5 +1137,28 @@ async fn reload_actions(ctx: &Context, msg: &Message, mut args: Args) -> Command
         .get_mut::<ActionTracker>()
         .expect("Expected Actions in TypeMap.");
     *actions = parse_action_file();
+    msg.react(&ctx.http, '✅').await?;
+    Ok(())
+}
+
+#[command]
+async fn start_discord_plays(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
+    let mut data = ctx.data.write().await;
+    let mut mode = data
+        .get_mut::<GamerModeTracker>()
+        .expect("Expected Game Tracker in TypeMap.");
+    *mode = true;
+    msg.react(&ctx.http, '✅').await?;
+    Ok(())
+}
+
+#[command]
+async fn stop_discord_plays(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
+    let mut data = ctx.data.write().await;
+    let mut mode = data
+        .get_mut::<GamerModeTracker>()
+        .expect("Expected Game Tracker in TypeMap.");
+    *mode = false;
+    msg.react(&ctx.http, '✅').await?;
     Ok(())
 }
