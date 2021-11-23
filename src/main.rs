@@ -675,8 +675,8 @@ fn parse_action_file() -> HashMap<String, Action> {
                             "tab" => enigo::Key::Tab,
                             "up" => enigo::Key::UpArrow,
                             "a" | "b" | "c" | "d" | "e" | "f" | "g" | "h" | "i" | "j" | "k"
-                            | "l" | "m" | "n" | "o" | "p" | "q" | "r" | "s" | "t" | "u" | "v"
-                            | "w" | "x" | "y" | "z" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "`" | "-" | "=" | "[" | "]" | "\\" | ";" | "'" | "," | "." | "/" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "`" | "-" | "=" | "[" | "]" | "\\" | ";" | "'" | "," | "." | "/" => enigo::Key::Layout(
+                                | "l" | "m" | "n" | "o" | "p" | "q" | "r" | "s" | "t" | "u" | "v"
+                                | "w" | "x" | "y" | "z" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "`" | "-" | "=" | "[" | "]" | "\\" | ";" | "'" | "," | "." | "/"  => enigo::Key::Layout(
                                 raw_instruction[1].chars().next().expect(
                                     format!(
                                         "Invalid character in press at {} (This shouldn't happen)",
@@ -753,8 +753,8 @@ fn parse_action_file() -> HashMap<String, Action> {
                             "tab" => enigo::Key::Tab,
                             "up" => enigo::Key::UpArrow,
                             "a" | "b" | "c" | "d" | "e" | "f" | "g" | "h" | "i" | "j" | "k"
-                            | "l" | "m" | "n" | "o" | "p" | "q" | "r" | "s" | "t" | "u" | "v"
-                            | "w" | "x" | "y" | "z" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "`" | "-" | "=" | "[" | "]" | "\\" | ";" | "'" | "," | "." | "/" => enigo::Key::Layout(
+                                | "l" | "m" | "n" | "o" | "p" | "q" | "r" | "s" | "t" | "u" | "v"
+                                | "w" | "x" | "y" | "z" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "`" | "-" | "=" | "[" | "]" | "\\" | ";" | "'" | "," | "." | "/"  => enigo::Key::Layout(
                                 raw_instruction[1].chars().next().expect(
                                     format!(
                                         "Invalid character in release at {} (This shouldn't happen)",
@@ -847,7 +847,7 @@ fn parse_action_file() -> HashMap<String, Action> {
                                 "up" => enigo::Key::UpArrow,
                                 "a" | "b" | "c" | "d" | "e" | "f" | "g" | "h" | "i" | "j" | "k"
                                 | "l" | "m" | "n" | "o" | "p" | "q" | "r" | "s" | "t" | "u" | "v"
-                                | "w" | "x" | "y" | "z" => enigo::Key::Layout(
+                                | "w" | "x" | "y" | "z" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "`" | "-" | "=" | "[" | "]" | "\\" | ";" | "'" | "," | "." | "/"  => enigo::Key::Layout(
                                     raw_instruction[1].chars().next().expect(
                                         format!(
                                             "Invalid character in press at {} (This shouldn't happen)",
