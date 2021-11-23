@@ -1343,6 +1343,7 @@ async fn set_title(ctx: &Context, _msg: &Message, args: Args) -> CommandResult {
     } else {
         OpenOptions::new().write(true).create(true).open("info.json").unwrap()
     };
+    info.set_len(0).unwrap();
     info.write_all(serde_json::to_string(&about).unwrap().as_bytes()).unwrap();
     Ok(())
 }
@@ -1359,6 +1360,7 @@ async fn set_description(ctx: &Context, _msg: &Message, args: Args) -> CommandRe
     } else {
         OpenOptions::new().write(true).create(true).open("info.json").unwrap()
     };
+    info.set_len(0).unwrap();
     info.write_all(serde_json::to_string(&about).unwrap().as_bytes()).unwrap();
     Ok(())
 }
