@@ -89,14 +89,24 @@ impl TypeMapKey for ActionTracker {
     type Value = HashMap<String, Action>;
 }
 
+struct CustomAbout;
+
+impl TypeMapKey for CustomAbout {
+    type Value = HashMap<String, String>;
+}
+
 struct Handler;
 
 #[async_trait]
 impl EventHandler for Handler {
-    async fn ready(&self, _ctx: Context, _ready: Ready) {
+    async fn ready(&self, ctx: Context, _ready: Ready) {
+        let data = ctx.data.read().await;
+        let actions = data
+            .get::<ActionTracker>()
+            .expect("Expected ActionTracker in TypeMap.");
         print!("{esc}[2J{esc}[1;1H", esc = 27 as char);
         println!("Discord plays started");
-        //println!("Loaded {} actions", )
+        println!("Loaded {} action{}", actions.len(), if actions.len() > 1 { "s" } else { "" });
     }
 }
 
@@ -120,7 +130,14 @@ struct Mods;
 #[allowed_roles("Mods", "Admin", "Discord Plays Manager")]
 #[only_in(guilds)]
 #[summary = "Commands for gaming actions"]
-#[commands(reload_actions, start_discord_plays, stop_discord_plays)]
+#[commands(
+    reload_actions,
+    start_discord_plays,
+    stop_discord_plays,
+    set_icon,
+    set_title,
+    set_description
+)]
 struct Gaming;
 
 #[help]
@@ -205,24 +222,11 @@ async fn my_help(
         msg.channel_id.send_message(&context.http, |m| {
 			m.embed(|e| {
 				e.title("Slow Mode");
-				e.field("For Admins.", "Allows you to enable or disable slow mode in a channel,\n which you can either select by ID or use in the target channel.", false);
+				e.field("For Mods.", "Allows you to enable or disable slow mode in a channel,\n which you can either select by ID or use in the target channel.", false);
 				e
 			});
 			m
 		}).await.unwrap();
-    } else if help_target == "prefix" {
-        msg.channel_id
-            .send_message(&context.http, |m| {
-                m.embed(|e| {
-                    e.title("Prefix")
-                        .field("For anyone", "Shows the bot's prefix.", false);
-                    e
-                });
-
-                m
-            })
-            .await
-            .unwrap();
     } else if help_target == "latency" {
         msg.channel_id.send_message(&context.http, |m| {
 			m.embed(|e| {
@@ -237,9 +241,22 @@ async fn my_help(
         msg.channel_id
             .send_message(&context.http, |m| {
                 m.embed(|e| {
-                    e.title("Kill").field(
-                        "For Admins.",
-                        "Kills the bot as soon as possible.",
+                    e.title("Kill")
+                        .field("For Mods.", "Kills the bot as soon as possible.", false);
+                    e
+                });
+
+                m
+            })
+            .await
+            .unwrap();
+    } else if help_target == "about" {
+        msg.channel_id
+            .send_message(&context.http, |m| {
+                m.embed(|e| {
+                    e.title("About").field(
+                        "For Anyone",
+                        "Displays information about the currently configured game.",
                         false,
                     );
                     e
@@ -249,23 +266,88 @@ async fn my_help(
             })
             .await
             .unwrap();
-    } else if help_target == "start" && is_admin {
+    // set_title, set_description
+    } else if help_target == "start_discord_plays" && is_admin {
         msg.channel_id.send_message(&context.http, |m| {
 			m.embed(|e| {
 				e.title("Start Discord Plays")
-				.field("For Admins.", "Begin streaming actions from Discord to your computer.\nIt is recommended to have a failsafe and moderation ready before using, because otherwise you may have a very hard time turning it off.", false);
+				.field("For Mods.", "Begin streaming actions from Discord to your computer.\nIt is recommended to have a failsafe and moderation ready before using, because otherwise you may have a very hard time turning it off.", false);
 				e
 			});
 			
 			m
 		}).await.unwrap();
-    } else if help_target == "end_discord_plays" && is_admin {
+    } else if help_target == "stop_discord_plays" && is_admin {
         msg.channel_id
             .send_message(&context.http, |m| {
                 m.embed(|e| {
-                    e.title("End Discord Plays").field(
-                        "For Admins.",
+                    e.title("Stop Discord Plays").field(
+                        "For Mods.",
                         "Stops streaming actions from Discord to your computer.",
+                        false,
+                    );
+                    e
+                });
+
+                m
+            })
+            .await
+            .unwrap();
+    } else if help_target == "reload_actions" && is_admin {
+        msg.channel_id
+            .send_message(&context.http, |m| {
+                m.embed(|e| {
+                    e.title("Reload Actions").field(
+                        "For Mods.",
+                        "Reloads actions. If you made a change in the program, then it will be reflected.",
+                        false,
+                    );
+                    e
+                });
+
+                m
+            })
+            .await
+            .unwrap();
+    } else if help_target == "set_icon" && is_admin {
+        msg.channel_id
+            .send_message(&context.http, |m| {
+                m.embed(|e| {
+                    e.title("Set Icon").field(
+                        "For Mods.",
+                        "Sets the bot's avatar and the thumbnail in the about embed.",
+                        false,
+                    );
+                    e
+                });
+
+                m
+            })
+            .await
+            .unwrap();
+    } else if help_target == "set_title" && is_admin {
+        msg.channel_id
+            .send_message(&context.http, |m| {
+                m.embed(|e| {
+                    e.title("Set Title").field(
+                        "For Mods.",
+                        "Sets the title of the game being played in the about embed.",
+                        false,
+                    );
+                    e
+                });
+
+                m
+            })
+            .await
+            .unwrap();
+    } else if help_target == "set_description" && is_admin {
+        msg.channel_id
+            .send_message(&context.http, |m| {
+                m.embed(|e| {
+                    e.title("Set Description").field(
+                        "For Mods.",
+                        "Sets the description in the about emebd.",
                         false,
                     );
                     e
@@ -921,6 +1003,7 @@ async fn main() {
         data.insert::<ActionTracker>(parse_action_file());
         data.insert::<GamerModeTracker>(false);
         data.insert::<CommandCounter>(HashMap::default());
+        data.insert::<CustomAbout>(HashMap::from([("title".to_string(), "Sample title".to_string()), ("description".to_string(), "Sample description. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.".to_string())]))
     }
 
     let shard_manager = client.shard_manager.clone();
@@ -1025,7 +1108,29 @@ async fn about_role(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
 
 #[command]
 async fn about(ctx: &Context, msg: &Message) -> CommandResult {
-    msg.channel_id.say(&ctx.http, "This bot is made using Rust and Serenity\nIt allows Discord servers the bot is in to send commands to a computer and play a game.").await?;
+    let data = ctx.data.read().await;
+    let fields = data
+        .get::<CustomAbout>()
+        .expect("Expected Actions in TypeMap.");
+    let user = ctx.cache.current_user().await;
+
+    let url = match user.avatar_url() {
+        Some(url) => url,
+        None => "".to_string(),
+    };
+    msg.channel_id
+        .send_message(&ctx.http, |m| {
+            m.embed(|e| {
+                // ???
+                e.title(&fields[&"title".to_string()]);
+                e.description(&fields[&"description".to_string()]);
+                e.thumbnail(url);
+                e
+            });
+            m
+        })
+        .await
+        .unwrap();
 
     Ok(())
 }
@@ -1189,5 +1294,28 @@ async fn set_icon(ctx: &Context, msg: &Message, mut _args: Args) -> CommandResul
 
     let mut user = ctx.cache.current_user().await;
     let _ = user.edit(&ctx, |p| p.avatar(Some(&base64))).await;
+    msg.channel_id
+        .say(&ctx, "Avatar successfully changed.")
+        .await?;
+    Ok(())
+}
+
+#[command]
+async fn set_title(ctx: &Context, _msg: &Message, args: Args) -> CommandResult {
+    let mut data = ctx.data.write().await;
+    let about = data
+        .get_mut::<CustomAbout>()
+        .expect("Expected CustomAbout in TypeMap.");
+    about.insert("title".to_string(), args.rest().to_string());
+    Ok(())
+}
+
+#[command]
+async fn set_description(ctx: &Context, _msg: &Message, args: Args) -> CommandResult {
+    let mut data = ctx.data.write().await;
+    let about = data
+        .get_mut::<CustomAbout>()
+        .expect("Expected CustomAbout in TypeMap.");
+    about.insert("description".to_string(), args.rest().to_string());
     Ok(())
 }

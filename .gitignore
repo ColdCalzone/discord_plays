@@ -12,3 +12,4 @@ Cargo.lock
 # Token and Actions shouldn't be uploaded to github.
 token.txt
 actions.txt
+avatar.png
