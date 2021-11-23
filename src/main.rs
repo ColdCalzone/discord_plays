@@ -4,7 +4,7 @@ use std::{
     collections::{HashMap, HashSet},
     fmt::Write,
     fs::{File, OpenOptions},
-    io::{prelude::*, BufReader},
+    io::{prelude::*, BufReader, Write as FileWrite},
     path::Path,
     sync::Arc,
     thread::{sleep, spawn as thread_spawn},
@@ -28,6 +28,7 @@ use serenity::{
         id::UserId,
         permissions::Permissions,
     },
+    utils,
 };
 use tokio::sync::Mutex;
 
@@ -92,7 +93,7 @@ struct Handler;
 
 #[async_trait]
 impl EventHandler for Handler {
-    async fn ready(&self, ctx: Context, ready: Ready) {
+    async fn ready(&self, _ctx: Context, _ready: Ready) {
         print!("{esc}[2J{esc}[1;1H", esc = 27 as char);
         println!("Discord plays started");
         //println!("Loaded {} actions", )
@@ -160,12 +161,6 @@ async fn my_help(
     groups: &[&'static CommandGroup],
     owners: HashSet<UserId>,
 ) -> CommandResult {
-    let channel_name_option = msg.channel_id.name(&context.cache).await;
-    let channel_name = match channel_name_option {
-        Some(x) => x,
-        None => "Error".to_string(),
-    };
-
     let mut is_admin: bool = false;
 
     if let Some(member) = &msg.member {
@@ -316,7 +311,7 @@ async fn my_help(
 }
 
 #[hook]
-async fn before(ctx: &Context, msg: &Message, command_name: &str) -> bool {
+async fn before(ctx: &Context, _msg: &Message, command_name: &str) -> bool {
     // Increment the number of times this command has been run once. If
     // the command's name does not exist in the counter, add a default
     // value of 0.
@@ -346,7 +341,7 @@ async fn unknown_command(_ctx: &Context, _msg: &Message, unknown_command_name: &
 #[hook]
 async fn normal_message(ctx: &Context, msg: &Message) {
     println!("{}", msg.content);
-    let mut data = ctx.data.read().await;
+    let data = ctx.data.read().await;
     let mode = data
         .get::<GamerModeTracker>()
         .expect("Couldn't find Game mode tracker in TypeMap.");
@@ -356,7 +351,7 @@ async fn normal_message(ctx: &Context, msg: &Message) {
 
     if *mode {
         if actions.contains_key(&msg.content) {
-            let mut used_action = actions[&msg.content].clone();
+            let used_action = actions[&msg.content].clone();
 
             thread_spawn(move || {
                 let mut action_index: usize = 0;
@@ -460,7 +455,7 @@ fn _dispatch_error_no_macro<'fut>(
 // All action parsing code
 
 fn parse_action_file() -> HashMap<String, Action> {
-    let mut file: File = if Path::new("actions.txt").exists() {
+    let file: File = if Path::new("actions.txt").exists() {
         OpenOptions::new().read(true).open("actions.txt").unwrap()
     } else {
         {
@@ -847,7 +842,7 @@ async fn main() {
             }
             panic!("Put your Discord Bot Token in the token.txt file");
         }
-        file.read_to_string(&mut token);
+        file.read_to_string(&mut token).unwrap();
         print!("{}", token);
         token = token.replace("\n", "");
     }
@@ -1108,7 +1103,7 @@ async fn slow_mode(ctx: &Context, msg: &Message, mut args: Args) -> CommandResul
 }
 
 #[command]
-async fn kill(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
+async fn kill(ctx: &Context, _msg: &Message, _args: Args) -> CommandResult {
     let data = ctx.data.read().await;
 
     let shard_manager = match data.get::<ShardManagerContainer>() {
@@ -1122,9 +1117,9 @@ async fn kill(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
 }
 
 #[command]
-async fn reload_actions(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
+async fn reload_actions(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
     let mut data = ctx.data.write().await;
-    let mut actions = data
+    let actions = data
         .get_mut::<ActionTracker>()
         .expect("Expected Actions in TypeMap.");
     *actions = parse_action_file();
@@ -1133,9 +1128,9 @@ async fn reload_actions(ctx: &Context, msg: &Message, mut args: Args) -> Command
 }
 
 #[command]
-async fn start_discord_plays(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
+async fn start_discord_plays(ctx: &Context, msg: &Message, mut _args: Args) -> CommandResult {
     let mut data = ctx.data.write().await;
-    let mut mode = data
+    let mode = data
         .get_mut::<GamerModeTracker>()
         .expect("Expected Game Tracker in TypeMap.");
     *mode = true;
@@ -1144,12 +1139,55 @@ async fn start_discord_plays(ctx: &Context, msg: &Message, mut args: Args) -> Co
 }
 
 #[command]
-async fn stop_discord_plays(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
+async fn stop_discord_plays(ctx: &Context, msg: &Message, mut _args: Args) -> CommandResult {
     let mut data = ctx.data.write().await;
-    let mut mode = data
+    let mode = data
         .get_mut::<GamerModeTracker>()
         .expect("Expected Game Tracker in TypeMap.");
     *mode = false;
     msg.react(&ctx.http, '✅').await?;
+    Ok(())
+}
+
+#[command]
+async fn set_icon(ctx: &Context, msg: &Message, mut _args: Args) -> CommandResult {
+    //https://docs.rs/serenity/0.9.0/serenity/model/channel/struct.Attachment.html#method.download
+    if msg.attachments.len() > 0 {
+        let content = match msg.attachments[0].download().await {
+            Ok(content) => content,
+            Err(why) => {
+                println!("Error downloading attachment: {:?}", why);
+                let _ = msg.channel_id.say(&ctx, "Error downloading image").await;
+                return Ok(());
+            }
+        };
+        let mut file = match File::create("./avatar.png") {
+            Ok(file) => file,
+            Err(why) => {
+                println!("Error creating file: {:?}", why);
+                let _ = msg.channel_id.say(&ctx, "Error creating file").await;
+                return Ok(());
+            }
+        };
+
+        if let Err(why) = file.write(&content) {
+            println!("Error writing to file: {:?}", why);
+
+            return Ok(());
+        }
+    } else {
+        msg.channel_id
+            .say(
+                &ctx,
+                "No file provided; Please upload an image to change the avatar",
+            )
+            .await?;
+        return Ok(());
+    }
+
+    let base64 = utils::read_image("./avatar.png").expect("Failed to read image");
+
+    let mut user = ctx.cache.current_user().await;
+    let _ = user.edit(&ctx, |p| p.avatar(Some(&base64))).await;
     Ok(())
 }
