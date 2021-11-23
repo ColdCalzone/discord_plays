@@ -30,7 +30,7 @@ end
 ```
 # So how do I use it?
 Due to how this bot works - directly controlling your computer - this bot could not be hosted publically (Also, hosting is expensive!)
-Instead, you have to make a Discord bot, install the bot software on your computer, and set up a `token.txt`and `actions.txt`file where the executable is. You can also compile it yourself, however this likely won't be necessary.
+Instead, you have to make a Discord bot, ~~install~~ compile the bot software on your computer (See below), and set up a `token.txt`and `actions.txt`file where the executable is. You can also compile it yourself, ~~however this likely won't be necessary.~~ which until I can compile for other platforms, will be the only option.
 ## Making a Discord bot
 First, [Go here.](https://discord.com/developers/applications) Click the blue button in the top right (pictured below)
 ![Example](https://coldcalzone.github.io/pictures/Screenshot%20from%202021-11-22%2019-01-56.png)
@@ -48,4 +48,8 @@ Finally, click `OAuth2`, then click `URL Generator` below that. You will be pres
 Ignore the next set of checkboxes, copy the url below it, but replace `permissions=0` with `permissions=67225664`
 #### Huzzah! You have an invite link for your very own Discord bot!
 ##### But it's not doing anything!
-Next you have to run the program you downloaded on your computer, assuming everything has gone well the bot will whirr to life and you'll have your very own discord bot, which controls your computer. Have fun!
+Next you have to ~~run the program you downloaded on your computer,~~ compile the program. Assuming everything goes well the bot will whirr to life and you'll have your very own discord bot, which controls your computer.
+## Compiling The Program
+This is where a first-time user may have some problems, but don't worry! It won't be very hard.
+First open up your terminal / command prompt, [head here](https://www.rust-lang.org/learn/get-started) and follow the instructions to install `rustup`. Then, move your terminal to where you put the source code (What you downloaded above) and execute `cargo build --release`. You can now close the terminal. Open up that folder with a regular file explorer and go to `target/release/`. Copy the `discord_plays` file out of there. This file is what you will run to start the bot. I recommend placing this in a folder named `Discord Plays` and deleting the folder the code was in.
+##### That's it! Now you have a usable Discord bot!
