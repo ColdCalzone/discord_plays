@@ -32,6 +32,7 @@ pub mod parsing {
         },
         Wait(u64),
         Type(String),
+        Call(String),
         End,
     }
 
@@ -42,40 +43,66 @@ pub mod parsing {
     }
 
     pub fn parse_action_file() -> HashMap<String, Action> {
-        let file: File = if Path::new("actions.txt").exists() {
-            OpenOptions::new().read(true).open("actions.txt").unwrap()
-        } else {
-            {
-                OpenOptions::new()
-                    .write(true)
-                    .create(true)
-                    .open("actions.txt")
-                    .unwrap();
-            }
-            println!(
-                "Create new actions in actions.txt\nSee the GitHub for documentation and examples."
-            );
-            OpenOptions::new().read(true).open("actions.txt").unwrap()
-        };
-        let reader = BufReader::new(file);
-
         let mut actions: HashMap<String, Action> = HashMap::new();
+        {
+            let file: File = if Path::new("actions.txt").exists() {
+                OpenOptions::new().read(true).open("actions.txt").unwrap()
+            } else {
+                {
+                    OpenOptions::new()
+                        .write(true)
+                        .create(true)
+                        .open("actions.txt")
+                        .unwrap();
+                }
+                println!(
+                    "Create new actions in actions.txt\nSee the GitHub for documentation and examples."
+                );
+                OpenOptions::new().read(true).open("actions.txt").unwrap()
+            };
+            
+            
+            // Check entire file for actions before compiling actions
+            let first_pass = BufReader::new(file);
+            for line in first_pass.lines() {
+                if let Ok(the_line) = line {
+                    let no_comments = the_line.split("//").collect::<Vec<&str>>()[0].to_string();
+
+                    let raw_instruction: Vec<&str> =
+                        no_comments.split_whitespace().collect::<Vec<&str>>();
+
+                    let trimmed_line = raw_instruction.join(" ");
+
+                    if trimmed_line == "" {
+                        continue;
+                    }
+
+                    if trimmed_line.ends_with(":") {
+                        actions.insert(trimmed_line.split(":").collect::<Vec<&str>>()[0].to_string(), Action {
+                            name: Some(trimmed_line.split(":").collect::<Vec<&str>>()[0].to_string()),
+                            instructions: vec![]
+                        });
+                    }
+                }
+            }
+        }
+        let file : File = OpenOptions::new().read(true).open("actions.txt").unwrap();
+        let reader = BufReader::new(file);
 
         let mut action: Action = Action {
             name: None,
             instructions: vec![],
         };
 
-        let mut line_num: u64 = 0;
+        let line_num: u64 = 0;
         for line in reader.lines() {
             // An example of my incredibly sophisticated naming system
             if let Ok(the_line) = line {
-                line_num += 1;
                 let no_comments = the_line.split("//").collect::<Vec<&str>>()[0].to_string();
-                
+
                 let mut raw_instruction: Vec<&str> =
                     no_comments.split_whitespace().collect::<Vec<&str>>();
-                
+
                 let trimmed_line = raw_instruction.join(" ");
 
                 if trimmed_line == "" {
@@ -83,7 +110,8 @@ pub mod parsing {
                 }
 
                 if trimmed_line.ends_with(":") {
-                    action.name = Some(trimmed_line.split(":").collect::<Vec<&str>>()[0].to_string());
+                    action.name =
+                        Some(trimmed_line.split(":").collect::<Vec<&str>>()[0].to_string());
                     continue;
                 }
                 let instruction: Token = match raw_instruction[0] {
@@ -241,10 +269,14 @@ pub mod parsing {
                     }
                     "end" => Token::End,
                     _ => {
-                        panic!("Invalid instruction, line {}", line_num)
+                        if actions.contains_key(&trimmed_line) {
+                            Token::Call(trimmed_line)
+                        } else {
+                            panic!("Invalid instruction, line {}", line_num)
+                        }
                     }
                 };
-                if instruction == Token::End {
+                    if instruction == Token::End {
                     // I hate this and everything about this.
                     action.instructions.push(instruction);
                     println!("{:#?}", action);

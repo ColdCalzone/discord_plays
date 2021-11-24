@@ -418,59 +418,67 @@ async fn normal_message(ctx: &Context, msg: &Message) {
     let actions = data
         .get::<ActionTracker>()
         .expect("Couldn't find actions in TypeMap.");
-
-    if *mode {
-        if actions.contains_key(&msg.content) {
-            let used_action = actions[&msg.content].clone();
-
+        
+        if *mode {
+        let used_action = msg.content.clone();
+        if actions.contains_key(&used_action) {
+            let thread_actions = actions.clone();
             thread_spawn(move || {
-                let mut action_index: usize = 0;
-                let mut enigo = Enigo::new();
-                loop {
-                    match &used_action.instructions[action_index] {
-                        parsing::Token::MouseMove {
-                            direction,
-                            distance,
-                        } => match direction {
-                            parsing::Direction::Up => {
-                                enigo.mouse_move_relative(0, -*distance);
+                let used_action_clone = &used_action.clone();
+                fn run_action(actions : &HashMap<String, parsing::Action>, action : String) {
+                    let mut enigo = Enigo::new();
+                    let used_action = actions[&action].clone();
+                    let mut action_index: usize = 0;
+                    loop {
+                        match &used_action.instructions[action_index] {
+                            parsing::Token::MouseMove {
+                                direction,
+                                distance,
+                            } => match direction {
+                                parsing::Direction::Up => {
+                                    enigo.mouse_move_relative(0, -*distance);
+                                },
+                                parsing::Direction::Down => {
+                                    enigo.mouse_move_relative(0, *distance);
+                                },
+                                parsing::Direction::Left => {
+                                    enigo.mouse_move_relative(-*distance, 0);
+                                },
+                                parsing::Direction::Right => {
+                                    enigo.mouse_move_relative(*distance, 0);
+                                },
+                            },
+                            parsing::Token::Key { button, release } => {
+                                if !release {
+                                    enigo.key_down(*button);
+                                } else {
+                                    enigo.key_up(*button);
+                                }
+                            },
+                            parsing::Token::Click { button, release } => {
+                                if !release {
+                                    enigo.mouse_down(*button);
+                                    } else {
+                                    enigo.mouse_up(*button);
+                                }   
+                            },
+                            parsing::Token::Wait(time) => {
+                                sleep(Duration::from_millis(*time));
+                            },
+                            parsing::Token::Type(text) => {
+                                enigo.key_sequence(&text);
+                            },
+                            parsing::Token::Call(new_action) => {
+                                run_action(actions, new_action.to_string());
                             }
-                            parsing::Direction::Down => {
-                                enigo.mouse_move_relative(0, *distance);
-                            }
-                            parsing::Direction::Left => {
-                                enigo.mouse_move_relative(-*distance, 0);
-                            }
-                            parsing::Direction::Right => {
-                                enigo.mouse_move_relative(*distance, 0);
-                            }
-                        },
-                        parsing::Token::Key { button, release } => {
-                            if !release {
-                                enigo.key_down(*button);
-                            } else {
-                                enigo.key_up(*button);
-                            }
+                            parsing::Token::End => {
+                                break;
+                            },
                         }
-                        parsing::Token::Click { button, release } => {
-                            if !release {
-                                enigo.mouse_down(*button);
-                            } else {
-                                enigo.mouse_up(*button);
-                            }
-                        }
-                        parsing::Token::Wait(time) => {
-                            sleep(Duration::from_millis(*time));
-                        }
-                        parsing::Token::Type(text) => {
-                            enigo.key_sequence(&text);
-                        }
-                        parsing::Token::End => {
-                            break;
-                        }
+                        action_index += 1;
                     }
-                    action_index += 1;
                 }
+                run_action(&thread_actions, used_action_clone.to_string());
             })
             .join()
             .expect("Error running action");
