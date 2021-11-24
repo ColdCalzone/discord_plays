@@ -6,7 +6,7 @@ This bot has a simple scripting language allowing you to create "actions," or si
 // actions.txt
 // This is how to define an action. 
 // There must be a new line after the :
-move left: // Discord can call this action by typing MoveLeft
+MoveLeft: // Discord can call this action by typing MoveLeft
 hold left 2000 // hold the left arrow key for 2 seconds (2000 milliseconds)
 end // All actions must have an "end" statement to declare them as over.
 move right:
@@ -19,13 +19,21 @@ Talk:
 hold enter 100 // hold enter for 100 milliseconds (0.1 seconds)
 // basically, tap enter
 end
-ComplexAction:
+copy:
 press mouse left // Press and hold the left mouse button
 move left 500 // Move the cursor 500 pixels to the left
 release mouse left // Release the left mouse button
 press ctrl
 hold c 500
 release ctrl
+end
+complex action:
+MoveLeft // Calling an action in another action
+// It will wait until the action complete
+wait 1000
+MoveRight
+wait 1000
+jump
 end
 ```
 (Check the [Wiki](https://github.com/ColdCalzone/discord_plays/wiki) for full documentation)
