@@ -6,7 +6,7 @@ use std::{
     collections::{HashMap, HashSet},
     fmt::Write,
     fs::{File, OpenOptions},
-    io::{prelude::*, BufReader, Write as FileWrite},
+    io::{prelude::*, Write as FileWrite},
     path::Path,
     sync::Arc,
     thread::{sleep, spawn as thread_spawn},
@@ -36,33 +36,9 @@ use tokio::sync::Mutex;
 
 use enigo::*;
 
-// Scripting stuff
-#[derive(Clone, Copy, PartialEq, Debug)]
-enum Direction {
-    Up,
-    Down,
-    Left,
-    Right,
-}
+mod action_parsing;
 
-// Opcodes for actions
-#[derive(Clone, PartialEq, Debug)]
-enum Token {
-    MouseMove { direction: Direction, distance: i32 },
-    Key { button: enigo::Key },
-    KeyRelease { button: enigo::Key },
-    Click { button: enigo::MouseButton },
-    ClickRelease { button: enigo::MouseButton },
-    Wait(u64),
-    Type(String),
-    End,
-}
-
-#[derive(Debug, Clone)]
-struct Action {
-    name: Option<String>,
-    instructions: Vec<Token>,
-}
+pub use crate::action_parsing::parsing;
 
 // A container type is created for inserting into the Client's `data`, which
 // allows for data to be accessible across all events and framework commands, or
@@ -88,7 +64,7 @@ impl TypeMapKey for GamerModeTracker {
 struct ActionTracker;
 
 impl TypeMapKey for ActionTracker {
-    type Value = HashMap<String, Action>;
+    type Value = HashMap<String, parsing::Action>;
 }
 
 #[derive(Deserialize, Serialize)]
@@ -452,42 +428,44 @@ async fn normal_message(ctx: &Context, msg: &Message) {
                 let mut enigo = Enigo::new();
                 loop {
                     match &used_action.instructions[action_index] {
-                        Token::MouseMove {
+                        parsing::Token::MouseMove {
                             direction,
                             distance,
                         } => match direction {
-                            Direction::Up => {
+                            parsing::Direction::Up => {
                                 enigo.mouse_move_relative(0, -*distance);
                             }
-                            Direction::Down => {
+                            parsing::Direction::Down => {
                                 enigo.mouse_move_relative(0, *distance);
                             }
-                            Direction::Left => {
+                            parsing::Direction::Left => {
                                 enigo.mouse_move_relative(-*distance, 0);
                             }
-                            Direction::Right => {
+                            parsing::Direction::Right => {
                                 enigo.mouse_move_relative(*distance, 0);
                             }
                         },
-                        Token::Key { button } => {
-                            enigo.key_down(*button);
+                        parsing::Token::Key { button, release } => {
+                            if !release {
+                                enigo.key_down(*button);
+                            } else {
+                                enigo.key_up(*button);
+                            }
                         }
-                        Token::KeyRelease { button } => {
-                            enigo.key_up(*button);
+                        parsing::Token::Click { button, release } => {
+                            if !release {
+                                enigo.mouse_down(*button);
+                            } else {
+                                enigo.mouse_up(*button);
+                            }
                         }
-                        Token::Click { button } => {
-                            enigo.mouse_down(*button);
-                        }
-                        Token::ClickRelease { button } => {
-                            enigo.mouse_up(*button);
-                        }
-                        Token::Wait(time) => {
+                        parsing::Token::Wait(time) => {
                             sleep(Duration::from_millis(*time));
                         }
-                        Token::Type(text) => {
+                        parsing::Token::Type(text) => {
                             enigo.key_sequence(&text);
                         }
-                        Token::End => {
+                        parsing::Token::End => {
                             break;
                         }
                     }
@@ -546,377 +524,6 @@ fn _dispatch_error_no_macro<'fut>(
     .boxed()
 }
 
-// All action parsing code
-
-fn parse_action_file() -> HashMap<String, Action> {
-    let file: File = if Path::new("actions.txt").exists() {
-        OpenOptions::new().read(true).open("actions.txt").unwrap()
-    } else {
-        {
-            OpenOptions::new()
-                .write(true)
-                .create(true)
-                .open("actions.txt")
-                .unwrap();
-        }
-        println!(
-            "Create new actions in actions.txt\nSee the GitHub for documentation and examples."
-        );
-        OpenOptions::new().read(true).open("actions.txt").unwrap()
-    };
-    let reader = BufReader::new(file);
-
-    let mut actions: HashMap<String, Action> = HashMap::new();
-
-    let mut action: Action = Action {
-        name: None,
-        instructions: vec![],
-    };
-
-    let mut line_num: u64 = 0;
-    for line in reader.lines() {
-        // An example of my incredibly sophisticated naming system
-        if let Ok(the_line) = line {
-            line_num += 1;
-            if the_line == "" {
-                continue;
-            }
-            let mut raw_instruction: Vec<&str> = the_line.split_whitespace().collect::<Vec<&str>>();
-
-            let mut comment: bool = false;
-            let mut index: usize = 0;
-            let mut all_comment: bool = false;
-            while index < raw_instruction.len() {
-                if comment {
-                    raw_instruction.remove(index);
-                } else if raw_instruction[index].contains("//") {
-                    comment = true;
-                    if raw_instruction[index].starts_with("//") {
-                        raw_instruction.remove(index);
-                        if index == 0 {
-                            all_comment = true;
-                            break;
-                        }
-                    } else {
-                        raw_instruction[index] =
-                            raw_instruction[index].split("//").collect::<Vec<&str>>()[0];
-                        index += 1;
-                    }
-                } else {
-                    index += 1;
-                }
-            }
-            if all_comment {
-                continue;
-            }
-            if raw_instruction[0].ends_with(":") {
-                action.name =
-                    Some(raw_instruction[0].split(":").collect::<Vec<&str>>()[0].to_string());
-                continue;
-            }
-
-            let instruction: Token = match raw_instruction[0] {
-                "move" => Token::MouseMove {
-                    direction: match raw_instruction[1] {
-                        "up" => Direction::Up,
-                        "down" => Direction::Down,
-                        "left" => Direction::Left,
-                        "right" => Direction::Right,
-                        _ => {
-                            panic!(
-                                "Invalid mouse move direction in 'move' instruction, line {}",
-                                line_num
-                            )
-                        }
-                    },
-                    distance: raw_instruction[2].parse::<i32>().expect(
-                        format!("Invalid distance 'move' instruction, line {}", line_num).as_str(),
-                    ),
-                },
-                "press" => match raw_instruction[1] {
-                    "mouse" => Token::Click {
-                        button: match raw_instruction[2] {
-                            "left" => enigo::MouseButton::Left,
-                            "middle" => enigo::MouseButton::Middle,
-                            "right" => enigo::MouseButton::Right,
-                            _ => {
-                                panic!(
-                                    "Invalid mouse button in 'press' instruction, line {}",
-                                    line_num
-                                )
-                            }
-                        },
-                    },
-                    // Kill
-                    _ => Token::Key {
-                        button: match raw_instruction[1] {
-                            "alt" => enigo::Key::Alt,
-                            "backspace" | "back" => enigo::Key::Backspace,
-                            "caps_lock" => enigo::Key::CapsLock,
-                            "control" | "ctrl" => enigo::Key::Control,
-                            "del" | "delete" => enigo::Key::Delete,
-                            "down" => enigo::Key::DownArrow,
-                            "end" => enigo::Key::End,
-                            "esc" | "escape" => enigo::Key::Escape,
-                            "f1" => enigo::Key::F1,
-                            "f10" => enigo::Key::F10,
-                            "f11" => enigo::Key::F11,
-                            "f12" => enigo::Key::F12,
-                            "f2" => enigo::Key::F2,
-                            "f3" => enigo::Key::F3,
-                            "f4" => enigo::Key::F4,
-                            "f5" => enigo::Key::F5,
-                            "f6" => enigo::Key::F6,
-                            "f7" => enigo::Key::F7,
-                            "f8" => enigo::Key::F8,
-                            "f9" => enigo::Key::F9,
-                            "home" => enigo::Key::Home,
-                            "left" => enigo::Key::LeftArrow,
-                            "win" | "windows" | "meta" | "command" | "super" => enigo::Key::Meta,
-                            "option" => enigo::Key::Option,
-                            "pgdown" | "pg_down" | "page_down" => enigo::Key::PageDown,
-                            "pgup" | "pg_up" | "page_up" => enigo::Key::PageUp,
-                            "return" | "enter" => enigo::Key::Return,
-                            "right" => enigo::Key::RightArrow,
-                            "shift" => enigo::Key::Shift,
-                            "space" => enigo::Key::Space,
-                            "tab" => enigo::Key::Tab,
-                            "up" => enigo::Key::UpArrow,
-                            "a" | "b" | "c" | "d" | "e" | "f" | "g" | "h" | "i" | "j" | "k"
-                                | "l" | "m" | "n" | "o" | "p" | "q" | "r" | "s" | "t" | "u" | "v"
-                                | "w" | "x" | "y" | "z" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "`" | "-" | "=" | "[" | "]" | "\\" | ";" | "'" | "," | "." | "/"  => enigo::Key::Layout(
-                                raw_instruction[1].chars().next().expect(
-                                    format!(
-                                        "Invalid character in press at {} (This shouldn't happen)",
-                                        line_num
-                                    )
-                                    .as_str(),
-                                ),
-                            ),
-                            _ => {
-                                panic!(
-                                    "Invalid key name '{}' in 'press' instruction, line {}\n{}",
-                                    raw_instruction[1],
-                                    line_num,
-                                    if raw_instruction[1] == "right"
-                                        || raw_instruction[1] == "left"
-                                        || raw_instruction[1] == "middle"
-                                    {
-                                        "Perhaps you meant to press a mouse button?"
-                                    } else {
-                                        ""
-                                    }
-                                )
-                            }
-                        },
-                    },
-                },
-                "release" => match raw_instruction[1] {
-                    "mouse" => Token::ClickRelease {
-                        button: match raw_instruction[2] {
-                            "left" => enigo::MouseButton::Left,
-                            "middle" => enigo::MouseButton::Middle,
-                            "right" => enigo::MouseButton::Right,
-                            _ => {
-                                panic!(
-                                    "Invalid mouse button in 'release' instruction, line {}",
-                                    line_num
-                                )
-                            }
-                        },
-                    },
-                    // Kill
-                    _ => Token::KeyRelease {
-                        button: match raw_instruction[1] {
-                            "alt" => enigo::Key::Alt,
-                            "backspace" | "back" => enigo::Key::Backspace,
-                            "caps_lock" => enigo::Key::CapsLock,
-                            "control" | "ctrl" => enigo::Key::Control,
-                            "del" | "delete" => enigo::Key::Delete,
-                            "down" => enigo::Key::DownArrow,
-                            "end" => enigo::Key::End,
-                            "esc" | "escape" => enigo::Key::Escape,
-                            "f1" => enigo::Key::F1,
-                            "f10" => enigo::Key::F10,
-                            "f11" => enigo::Key::F11,
-                            "f12" => enigo::Key::F12,
-                            "f2" => enigo::Key::F2,
-                            "f3" => enigo::Key::F3,
-                            "f4" => enigo::Key::F4,
-                            "f5" => enigo::Key::F5,
-                            "f6" => enigo::Key::F6,
-                            "f7" => enigo::Key::F7,
-                            "f8" => enigo::Key::F8,
-                            "f9" => enigo::Key::F9,
-                            "home" => enigo::Key::Home,
-                            "left" => enigo::Key::LeftArrow,
-                            "win" | "windows" | "meta" | "command" | "super" => enigo::Key::Meta,
-                            "option" => enigo::Key::Option,
-                            "pgdown" | "pg_down" | "page_down" => enigo::Key::PageDown,
-                            "pgup" | "pg_up" | "page_up" => enigo::Key::PageUp,
-                            "return" | "enter" => enigo::Key::Return,
-                            "right" => enigo::Key::RightArrow,
-                            "shift" => enigo::Key::Shift,
-                            "space" => enigo::Key::Space,
-                            "tab" => enigo::Key::Tab,
-                            "up" => enigo::Key::UpArrow,
-                            "a" | "b" | "c" | "d" | "e" | "f" | "g" | "h" | "i" | "j" | "k"
-                                | "l" | "m" | "n" | "o" | "p" | "q" | "r" | "s" | "t" | "u" | "v"
-                                | "w" | "x" | "y" | "z" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "`" | "-" | "=" | "[" | "]" | "\\" | ";" | "'" | "," | "." | "/"  => enigo::Key::Layout(
-                                raw_instruction[1].chars().next().expect(
-                                    format!(
-                                        "Invalid character in release at {} (This shouldn't happen)",
-                                        line_num
-                                    )
-                                    .as_str(),
-                                ),
-                            ),
-                            _ => {
-                                panic!(
-                                    "Invalid key name '{}' in 'release' instruction, line {}\n{}",
-                                    raw_instruction[1],
-                                    line_num,
-                                    if raw_instruction[1] == "right"
-                                        || raw_instruction[1] == "left"
-                                        || raw_instruction[1] == "middle"
-                                    {
-                                        "Perhaps you meant to press a mouse button?"
-                                    } else {
-                                        ""
-                                    }
-                                )
-                            }
-                        },
-                    },
-                },
-                "wait" => Token::Wait(raw_instruction[1].parse::<u64>().expect(
-                    format!("Invalid time in 'wait' instruction, line {}", line_num).as_str(),
-                )),
-                "type" => {
-                    raw_instruction.remove(0);
-                    Token::Type(raw_instruction.join(" "))
-                },
-                "end" => Token::End,
-                // instructions that get compiled to more complex tokens
-                // Somewhat hacky implementation, but it works perfectly fine.
-                // Also code copying lmao
-                "hold" => {
-                    let mut mouse : bool = false;
-                    let token = match raw_instruction[1] {
-                        "mouse" => {
-                            mouse = true;
-                            Token::Click {
-                            button: match raw_instruction[2] {
-                                "left" => enigo::MouseButton::Left,
-                                "middle" => enigo::MouseButton::Middle,
-                                "right" => enigo::MouseButton::Right,
-                                _ => {
-                                    panic!(
-                                        "Invalid mouse button in 'press' instruction, line {}",
-                                        line_num
-                                    )
-                                }
-                            },
-                        }},
-                        // Kill
-                        _ => Token::Key {
-                            button: match raw_instruction[1] {
-                                "alt" => enigo::Key::Alt,
-                                "backspace" | "back" => enigo::Key::Backspace,
-                                "caps_lock" => enigo::Key::CapsLock,
-                                "control" | "ctrl" => enigo::Key::Control,
-                                "del" | "delete" => enigo::Key::Delete,
-                                "down" => enigo::Key::DownArrow,
-                                "end" => enigo::Key::End,
-                                "esc" | "escape" => enigo::Key::Escape,
-                                "f1" => enigo::Key::F1,
-                                "f10" => enigo::Key::F10,
-                                "f11" => enigo::Key::F11,
-                                "f12" => enigo::Key::F12,
-                                "f2" => enigo::Key::F2,
-                                "f3" => enigo::Key::F3,
-                                "f4" => enigo::Key::F4,
-                                "f5" => enigo::Key::F5,
-                                "f6" => enigo::Key::F6,
-                                "f7" => enigo::Key::F7,
-                                "f8" => enigo::Key::F8,
-                                "f9" => enigo::Key::F9,
-                                "home" => enigo::Key::Home,
-                                "left" => enigo::Key::LeftArrow,
-                                "win" | "windows" | "meta" | "command" | "super" => enigo::Key::Meta,
-                                "option" => enigo::Key::Option,
-                                "pgdown" | "pg_down" | "page_down" => enigo::Key::PageDown,
-                                "pgup" | "pg_up" | "page_up" => enigo::Key::PageUp,
-                                "return" | "enter" => enigo::Key::Return,
-                                "right" => enigo::Key::RightArrow,
-                                "shift" => enigo::Key::Shift,
-                                "space" => enigo::Key::Space,
-                                "tab" => enigo::Key::Tab,
-                                "up" => enigo::Key::UpArrow,
-                                "a" | "b" | "c" | "d" | "e" | "f" | "g" | "h" | "i" | "j" | "k"
-                                | "l" | "m" | "n" | "o" | "p" | "q" | "r" | "s" | "t" | "u" | "v"
-                                | "w" | "x" | "y" | "z" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "`" | "-" | "=" | "[" | "]" | "\\" | ";" | "'" | "," | "." | "/"  => enigo::Key::Layout(
-                                    raw_instruction[1].chars().next().expect(
-                                        format!(
-                                            "Invalid character in press at {} (This shouldn't happen)",
-                                            line_num
-                                        )
-                                        .as_str(),
-                                    ),
-                                ),
-                                _ => {
-                                    panic!(
-                                        "Invalid key name '{}' in 'press' instruction, line {}\n{}",
-                                        raw_instruction[1],
-                                        line_num,
-                                        if raw_instruction[1] == "right"
-                                            || raw_instruction[1] == "left"
-                                            || raw_instruction[1] == "middle"
-                                        {
-                                            "Perhaps you meant to press a mouse button?"
-                                        } else {
-                                            ""
-                                        }
-                                    )
-                                }
-                            },
-                        },
-                    };
-                    action.instructions.push(token.clone());
-                    action.instructions.push(Token::Wait((if mouse {raw_instruction[3]} else {raw_instruction[2]}).parse::<u64>().expect(format!("Invalid time in 'hold' instruction, line {}", line_num).as_str())));
-                    match token {
-                        Token::Key { button } => Token::KeyRelease { button: button},
-                        Token::Click { button } => Token::ClickRelease { button: button},
-                        _ => { panic!("Invalid token in 'hold' instruction. This shouldn't happen!")}
-                    }
-                },
-                _ => {
-                    panic!("Invalid instruction, line {}", line_num)
-                }
-            };
-            if instruction == Token::End {
-                // I hate this and everything about this.
-                action.instructions.push(instruction);
-                println!("{:#?}", action);
-                actions.insert(
-                    action
-                        .name
-                        .as_ref()
-                        .expect("No name for action")
-                        .to_string(),
-                    action,
-                );
-                action = Action {
-                    name: None,
-                    instructions: vec![],
-                };
-            } else {
-                action.instructions.push(instruction);
-            }
-        }
-    }
-    return actions;
-}
 
 #[tokio::main]
 async fn main() {
@@ -1009,7 +616,6 @@ async fn main() {
         .await
         .expect("Err creating client");
 
-
     let mut info: File = if Path::new("info.json").exists() {
         OpenOptions::new().read(true).open("info.json").unwrap()
     } else {
@@ -1026,16 +632,16 @@ async fn main() {
         );
         OpenOptions::new().read(true).open("actions.txt").unwrap()
     };
-    let mut json_content : String = String::new();
+    let mut json_content: String = String::new();
     info.read_to_string(&mut json_content).unwrap();
 
     {
         let mut data = client.data.write().await;
         data.insert::<ShardManagerContainer>(client.shard_manager.clone());
-        data.insert::<ActionTracker>(parse_action_file());
+        data.insert::<ActionTracker>(parsing::parse_action_file());
         data.insert::<GamerModeTracker>(false);
         data.insert::<CommandCounter>(HashMap::default());
-        data.insert::<CustomAbout>( serde_json::from_str(&json_content).unwrap() )
+        data.insert::<CustomAbout>(serde_json::from_str(&json_content).unwrap())
     }
 
     let shard_manager = client.shard_manager.clone();
@@ -1258,7 +864,7 @@ async fn reload_actions(ctx: &Context, msg: &Message, _args: Args) -> CommandRes
     let actions = data
         .get_mut::<ActionTracker>()
         .expect("Expected Actions in TypeMap.");
-    *actions = parse_action_file();
+    *actions = parsing::parse_action_file();
     msg.react(&ctx.http, '✅').await?;
     Ok(())
 }
@@ -1341,10 +947,15 @@ async fn set_title(ctx: &Context, _msg: &Message, args: Args) -> CommandResult {
     let mut info: File = if Path::new("info.json").exists() {
         OpenOptions::new().write(true).open("info.json").unwrap()
     } else {
-        OpenOptions::new().write(true).create(true).open("info.json").unwrap()
+        OpenOptions::new()
+            .write(true)
+            .create(true)
+            .open("info.json")
+            .unwrap()
     };
     info.set_len(0).unwrap();
-    info.write_all(serde_json::to_string(&about).unwrap().as_bytes()).unwrap();
+    info.write_all(serde_json::to_string(&about).unwrap().as_bytes())
+        .unwrap();
     Ok(())
 }
 
@@ -1358,9 +969,14 @@ async fn set_description(ctx: &Context, _msg: &Message, args: Args) -> CommandRe
     let mut info: File = if Path::new("info.json").exists() {
         OpenOptions::new().write(true).open("info.json").unwrap()
     } else {
-        OpenOptions::new().write(true).create(true).open("info.json").unwrap()
+        OpenOptions::new()
+            .write(true)
+            .create(true)
+            .open("info.json")
+            .unwrap()
     };
     info.set_len(0).unwrap();
-    info.write_all(serde_json::to_string(&about).unwrap().as_bytes()).unwrap();
+    info.write_all(serde_json::to_string(&about).unwrap().as_bytes())
+        .unwrap();
     Ok(())
 }
