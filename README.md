@@ -28,6 +28,7 @@ hold c 500
 release ctrl
 end
 ```
+(Check the [Wiki](https://github.com/ColdCalzone/discord_plays/wiki) for full documentation)
 # So how do I use it?
 Due to how this bot works - directly controlling your computer - this bot could not be hosted publically (Also, hosting is expensive!)
 Instead, you have to make a Discord bot, ~~install~~ compile the bot software on your computer [(See below)](https://github.com/ColdCalzone/discord_plays#compiling-the-program), and set up a `token.txt`and `actions.txt`file where the executable is. You can also compile it yourself, ~~however this likely won't be necessary.~~ which until I can compile for other platforms, will be the only option.
