@@ -627,10 +627,7 @@ async fn main() {
                 .unwrap();
             temp.write(b"{\"title\":\"Sample title\",\"description\": \"Sample description. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.\"}").unwrap();
         }
-        println!(
-            "Create new actions in actions.txt\nSee the GitHub for documentation and examples."
-        );
-        OpenOptions::new().read(true).open("actions.txt").unwrap()
+        OpenOptions::new().read(true).open("info.json").unwrap()
     };
     let mut json_content: String = String::new();
     info.read_to_string(&mut json_content).unwrap();
