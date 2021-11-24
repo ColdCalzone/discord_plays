@@ -71,44 +71,21 @@ pub mod parsing {
             // An example of my incredibly sophisticated naming system
             if let Ok(the_line) = line {
                 line_num += 1;
-                if the_line == "" {
-                    continue;
-                }
+                let no_comments = the_line.split("//").collect::<Vec<&str>>()[0].to_string();
+                
                 let mut raw_instruction: Vec<&str> =
-                    the_line.split_whitespace().collect::<Vec<&str>>();
+                    no_comments.split_whitespace().collect::<Vec<&str>>();
+                
+                let trimmed_line = raw_instruction.join(" ");
 
-                let mut comment: bool = false;
-                let mut index: usize = 0;
-                let mut all_comment: bool = false;
-                while index < raw_instruction.len() {
-                    if comment {
-                        raw_instruction.remove(index);
-                    } else if raw_instruction[index].contains("//") {
-                        comment = true;
-                        if raw_instruction[index].starts_with("//") {
-                            raw_instruction.remove(index);
-                            if index == 0 {
-                                all_comment = true;
-                                break;
-                            }
-                        } else {
-                            raw_instruction[index] =
-                                raw_instruction[index].split("//").collect::<Vec<&str>>()[0];
-                            index += 1;
-                        }
-                    } else {
-                        index += 1;
-                    }
-                }
-                if all_comment {
-                    continue;
-                }
-                if raw_instruction[0].ends_with(":") {
-                    action.name =
-                        Some(raw_instruction[0].split(":").collect::<Vec<&str>>()[0].to_string());
+                if trimmed_line == "" {
                     continue;
                 }
 
+                if trimmed_line.ends_with(":") {
+                    action.name = Some(trimmed_line.split(":").collect::<Vec<&str>>()[0].to_string());
+                    continue;
+                }
                 let instruction: Token = match raw_instruction[0] {
                     "move" => Token::MouseMove {
                         direction: match raw_instruction[1] {

@@ -4,12 +4,12 @@
 This bot has a simple scripting language allowing you to create "actions," or simple commands for your chat to use.
 ```p
 // actions.txt
-// This is how to define an action. It must be one word (No spaces) and end in a :
+// This is how to define an action. 
 // There must be a new line after the :
-MoveLeft: // Discord can call this action by typing MoveLeft
+move left: // Discord can call this action by typing MoveLeft
 hold left 2000 // hold the left arrow key for 2 seconds (2000 milliseconds)
 end // All actions must have an "end" statement to declare them as over.
-MoveRight:
+move right:
 hold right 2000 
 end
 Jump:

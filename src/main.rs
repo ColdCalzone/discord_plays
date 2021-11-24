@@ -935,7 +935,7 @@ async fn set_icon(ctx: &Context, msg: &Message, mut _args: Args) -> CommandResul
 }
 
 #[command]
-async fn set_title(ctx: &Context, _msg: &Message, args: Args) -> CommandResult {
+async fn set_title(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     let mut data = ctx.data.write().await;
     let mut about = data
         .get_mut::<CustomAbout>()
@@ -958,7 +958,7 @@ async fn set_title(ctx: &Context, _msg: &Message, args: Args) -> CommandResult {
 }
 
 #[command]
-async fn set_description(ctx: &Context, _msg: &Message, args: Args) -> CommandResult {
+async fn set_description(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     let mut data = ctx.data.write().await;
     let mut about = data
         .get_mut::<CustomAbout>()
