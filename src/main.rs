@@ -953,6 +953,7 @@ async fn set_title(ctx: &Context, _msg: &Message, args: Args) -> CommandResult {
     info.set_len(0).unwrap();
     info.write_all(serde_json::to_string(&about).unwrap().as_bytes())
         .unwrap();
+    msg.react(&ctx.http, '✅').await?;
     Ok(())
 }
 
@@ -975,5 +976,6 @@ async fn set_description(ctx: &Context, _msg: &Message, args: Args) -> CommandRe
     info.set_len(0).unwrap();
     info.write_all(serde_json::to_string(&about).unwrap().as_bytes())
         .unwrap();
+    msg.react(&ctx.http, '✅').await?;
     Ok(())
 }
