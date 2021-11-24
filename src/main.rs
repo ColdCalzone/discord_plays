@@ -93,7 +93,7 @@ impl EventHandler for Handler {
         println!(
             "Loaded {} action{}",
             actions.len(),
-            if actions.len() > 1 { "s" } else { "" }
+            if actions.len() == 1 { "" } else { "s" }
         );
     }
 }
