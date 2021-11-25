@@ -88,7 +88,6 @@ impl EventHandler for Handler {
         let actions = data
             .get::<ActionTracker>()
             .expect("Expected ActionTracker in TypeMap.");
-        print!("{esc}[2J{esc}[1;1H", esc = 27 as char);
         println!("Discord plays started");
         println!(
             "Loaded {} action{}",
@@ -552,7 +551,6 @@ async fn main() {
             panic!("Put your Discord Bot Token in the token.txt file");
         }
         file.read_to_string(&mut token).unwrap();
-        print!("{}", token);
         token = token.replace("\n", "");
     }
     let http = Http::new_with_token(&token);

@@ -64,8 +64,10 @@ pub mod parsing {
             
             // Check entire file for actions before compiling actions
             let first_pass = BufReader::new(file);
+            let mut line_num: u64 = 0;
             for line in first_pass.lines() {
                 if let Ok(the_line) = line {
+                    line_num += 1;
                     let no_comments = the_line.split("//").collect::<Vec<&str>>()[0].to_string();
 
                     let raw_instruction: Vec<&str> =
@@ -78,10 +80,17 @@ pub mod parsing {
                     }
 
                     if trimmed_line.ends_with(":") {
-                        actions.insert(trimmed_line.split(":").collect::<Vec<&str>>()[0].to_string(), Action {
-                            name: Some(trimmed_line.split(":").collect::<Vec<&str>>()[0].to_string()),
+                        let action_name = trimmed_line.split(":").collect::<Vec<&str>>()[0];
+                        actions.insert(action_name.to_string(), Action {
+                            name: Some(action_name.to_string()),
                             instructions: vec![]
                         });
+                        match action_name.split(" ").collect::<Vec<&str>>()[0] {
+                            "move" | "press" | "hold" | "release" | "wait" | "type" | "end" => {
+                                println!("WARNING: action with same name as builtin instruction at line {}", line_num);
+                            },
+                            _ => {}
+                        }
                     }
                 }
             }
@@ -94,10 +103,11 @@ pub mod parsing {
             instructions: vec![],
         };
 
-        let line_num: u64 = 0;
+        let mut line_num: u64 = 0;
         for line in reader.lines() {
             // An example of my incredibly sophisticated naming system
             if let Ok(the_line) = line {
+                line_num += 1;
                 let no_comments = the_line.split("//").collect::<Vec<&str>>()[0].to_string();
 
                 let mut raw_instruction: Vec<&str> =
@@ -279,7 +289,6 @@ pub mod parsing {
                     if instruction == Token::End {
                     // I hate this and everything about this.
                     action.instructions.push(instruction);
-                    println!("{:#?}", action);
                     actions.insert(
                         action
                             .name
