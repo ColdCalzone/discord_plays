@@ -7,7 +7,7 @@ pub mod parsing {
     };
 
     // Scripting stuff
-    #[derive(Clone, Copy, PartialEq, Debug)]
+    #[derive(Clone, Copy, PartialEq)]
     pub enum Direction {
         Up,
         Down,
@@ -16,7 +16,7 @@ pub mod parsing {
     }
 
     // Opcodes for actions
-    #[derive(Clone, PartialEq, Debug)]
+    #[derive(Clone, PartialEq)]
     pub enum Token {
         MouseMove {
             direction: Direction,
@@ -36,12 +36,11 @@ pub mod parsing {
         End,
     }
 
-    #[derive(Debug, Clone)]
+    #[derive(Clone)]
     pub struct Action {
         pub name: Option<String>,
         pub instructions: Vec<Token>,
     }
-
     pub fn parse_action_file() -> HashMap<String, Action> {
         let mut actions: HashMap<String, Action> = HashMap::new();
         {
@@ -60,8 +59,7 @@ pub mod parsing {
                 );
                 OpenOptions::new().read(true).open("actions.txt").unwrap()
             };
-            
-            
+
             // Check entire file for actions before compiling actions
             let first_pass = BufReader::new(file);
             let mut line_num: u64 = 0;
@@ -81,21 +79,24 @@ pub mod parsing {
 
                     if trimmed_line.ends_with(":") {
                         let action_name = trimmed_line.split(":").collect::<Vec<&str>>()[0];
-                        actions.insert(action_name.to_string(), Action {
-                            name: Some(action_name.to_string()),
-                            instructions: vec![]
-                        });
+                        actions.insert(
+                            action_name.to_string(),
+                            Action {
+                                name: Some(action_name.to_string()),
+                                instructions: vec![],
+                            },
+                        );
                         match action_name.split(" ").collect::<Vec<&str>>()[0] {
                             "move" | "press" | "hold" | "release" | "wait" | "type" | "end" => {
                                 println!("WARNING: action with same name as builtin instruction at line {}", line_num);
-                            },
+                            }
                             _ => {}
                         }
                     }
                 }
             }
         }
-        let file : File = OpenOptions::new().read(true).open("actions.txt").unwrap();
+        let file: File = OpenOptions::new().read(true).open("actions.txt").unwrap();
         let reader = BufReader::new(file);
 
         let mut action: Action = Action {
@@ -165,8 +166,8 @@ pub mod parsing {
                                     release: raw_instruction[0] == "release",
                                 }
                             },
-                        // Kill
                             _ => Token::Key {
+                                // Kill
                                 button: match raw_instruction[1] {
                                     "alt" => enigo::Key::Alt,
                                     "backspace" | "back" => enigo::Key::Backspace,
@@ -286,7 +287,7 @@ pub mod parsing {
                         }
                     }
                 };
-                    if instruction == Token::End {
+                if instruction == Token::End {
                     // I hate this and everything about this.
                     action.instructions.push(instruction);
                     actions.insert(

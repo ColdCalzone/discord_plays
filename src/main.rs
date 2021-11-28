@@ -99,7 +99,7 @@ impl EventHandler for Handler {
 
 #[group]
 #[only_in(guilds)]
-#[commands(about, commands, latency)]
+#[commands(about, commands, latency, actions)]
 struct General;
 
 #[group]
@@ -417,14 +417,14 @@ async fn normal_message(ctx: &Context, msg: &Message) {
     let actions = data
         .get::<ActionTracker>()
         .expect("Couldn't find actions in TypeMap.");
-        
-        if *mode {
+
+    if *mode {
         let used_action = msg.content.clone();
         if actions.contains_key(&used_action) {
             let thread_actions = actions.clone();
             thread_spawn(move || {
                 let used_action_clone = &used_action.clone();
-                fn run_action(actions : &HashMap<String, parsing::Action>, action : String) {
+                fn run_action(actions: &HashMap<String, parsing::Action>, action: String) {
                     let mut enigo = Enigo::new();
                     let used_action = actions[&action].clone();
                     let mut action_index: usize = 0;
@@ -436,16 +436,16 @@ async fn normal_message(ctx: &Context, msg: &Message) {
                             } => match direction {
                                 parsing::Direction::Up => {
                                     enigo.mouse_move_relative(0, -*distance);
-                                },
+                                }
                                 parsing::Direction::Down => {
                                     enigo.mouse_move_relative(0, *distance);
-                                },
+                                }
                                 parsing::Direction::Left => {
                                     enigo.mouse_move_relative(-*distance, 0);
-                                },
+                                }
                                 parsing::Direction::Right => {
                                     enigo.mouse_move_relative(*distance, 0);
-                                },
+                                }
                             },
                             parsing::Token::Key { button, release } => {
                                 if !release {
@@ -453,26 +453,26 @@ async fn normal_message(ctx: &Context, msg: &Message) {
                                 } else {
                                     enigo.key_up(*button);
                                 }
-                            },
+                            }
                             parsing::Token::Click { button, release } => {
                                 if !release {
                                     enigo.mouse_down(*button);
-                                    } else {
+                                } else {
                                     enigo.mouse_up(*button);
-                                }   
-                            },
+                                }
+                            }
                             parsing::Token::Wait(time) => {
                                 sleep(Duration::from_millis(*time));
-                            },
+                            }
                             parsing::Token::Type(text) => {
                                 enigo.key_sequence(&text);
-                            },
+                            }
                             parsing::Token::Call(new_action) => {
                                 run_action(actions, new_action.to_string());
                             }
                             parsing::Token::End => {
                                 break;
-                            },
+                            }
                         }
                         action_index += 1;
                     }
@@ -530,7 +530,6 @@ fn _dispatch_error_no_macro<'fut>(
     }
     .boxed()
 }
-
 
 #[tokio::main]
 async fn main() {
@@ -983,5 +982,29 @@ async fn set_description(ctx: &Context, msg: &Message, args: Args) -> CommandRes
     info.write_all(serde_json::to_string(&about).unwrap().as_bytes())
         .unwrap();
     msg.react(&ctx.http, '✅').await?;
+    Ok(())
+}
+
+#[command]
+async fn actions(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
+    let data = ctx.data.read().await;
+    let actions = data
+        .get::<ActionTracker>()
+        .expect("Expected ActionTracker in TypeMap.");
+    msg.channel_id
+        .send_message(&ctx.http, |m| {
+            m.embed(|e| {
+                e.title("Current Actions");
+                let mut list: String = String::new();
+                for action in actions.keys() {
+                    list += &(action.to_owned() + "\n");
+                }
+                e.description(list);
+                e
+            });
+            m
+        })
+        .await
+        .unwrap();
     Ok(())
 }
