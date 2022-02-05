@@ -30,6 +30,7 @@ pub mod parsing {
             button: enigo::MouseButton,
             release: bool,
         },
+        Screenshot,
         Wait(u64),
         Type(String),
         Call(String),
@@ -66,7 +67,7 @@ pub mod parsing {
             for line in first_pass.lines() {
                 if let Ok(the_line) = line {
                     line_num += 1;
-                    let no_comments = the_line.split("//").collect::<Vec<&str>>()[0].to_string();
+                    let no_comments = the_line.split("//").next().unwrap().to_string();
 
                     let raw_instruction: Vec<&str> =
                         no_comments.split_whitespace().collect::<Vec<&str>>();
@@ -78,7 +79,7 @@ pub mod parsing {
                     }
 
                     if trimmed_line.ends_with(":") {
-                        let action_name = trimmed_line.split(":").collect::<Vec<&str>>()[0];
+                        let action_name = trimmed_line.split(":").next().unwrap();
                         actions.insert(
                             action_name.to_string(),
                             Action {
@@ -86,7 +87,7 @@ pub mod parsing {
                                 instructions: vec![],
                             },
                         );
-                        match action_name.split(" ").collect::<Vec<&str>>()[0] {
+                        match action_name.split(" ").next().unwrap() {
                             "move" | "press" | "hold" | "release" | "wait" | "type" | "end" => {
                                 println!("WARNING: action with same name as builtin instruction at line {}", line_num);
                             }
@@ -109,7 +110,7 @@ pub mod parsing {
             // An example of my incredibly sophisticated naming system
             if let Ok(the_line) = line {
                 line_num += 1;
-                let no_comments = the_line.split("//").collect::<Vec<&str>>()[0].to_string();
+                let no_comments = the_line.split("//").next().unwrap().to_string();
 
                 let mut raw_instruction: Vec<&str> =
                     no_comments.split_whitespace().collect::<Vec<&str>>();
@@ -122,7 +123,7 @@ pub mod parsing {
 
                 if trimmed_line.ends_with(":") {
                     action.name =
-                        Some(trimmed_line.split(":").collect::<Vec<&str>>()[0].to_string());
+                        Some(trimmed_line.split(":").next().unwrap().to_string());
                     continue;
                 }
                 let instruction: Token = match raw_instruction[0] {
@@ -270,14 +271,15 @@ pub mod parsing {
                         } else {
                             token
                         }
-                    }
+                    },
                     "wait" => Token::Wait(raw_instruction[1].parse::<u64>().expect(
                         format!("Invalid time in 'wait' instruction, line {}", line_num).as_str(),
                     )),
                     "type" => {
                         raw_instruction.remove(0);
                         Token::Type(raw_instruction.join(" "))
-                    }
+                    },
+                    "screenshot" => Token::Screenshot,
                     "end" => Token::End,
                     _ => {
                         if actions.contains_key(&trimmed_line) {

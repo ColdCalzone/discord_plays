@@ -11,6 +11,7 @@ use std::{
     sync::Arc,
     thread::{sleep, spawn as thread_spawn},
     time::Duration,
+    process::Command,
 };
 
 use serenity::prelude::*;
@@ -469,6 +470,12 @@ async fn normal_message(ctx: &Context, msg: &Message) {
                             }
                             parsing::Token::Call(new_action) => {
                                 run_action(actions, new_action.to_string());
+                            }
+                            parsing::Token::Screenshot => {
+                                // Linux only. TODO: Make this work elsewhere
+                                Command::new("gnome-screenshot")
+                                .spawn()
+                                .expect("Error taking screenshot");
                             }
                             parsing::Token::End => {
                                 break;
